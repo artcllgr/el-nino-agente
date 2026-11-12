@@ -3,8 +3,9 @@
 2025/
 2026/
 *.zip
-*.CSV
-INMET_*.csv
+# Arquivos brutos das estacoes (nao usar "*.CSV": no Windows o Git ignora
+# maiusculas/minusculas e excluiria os CSVs processados de saida/)
+INMET_*
 
 # Python
 __pycache__/
