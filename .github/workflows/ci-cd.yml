@@ -83,7 +83,8 @@ jobs:
     timeout-minutes: 30
     environment:
       name: producao
-      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+      # endereco unico gerado pelo Azure (ex.: <nome>-<codigo>.eastus2-01.azurewebsites.net)
+      url: ${{ vars.AZURE_WEBAPP_URL }}
 
     steps:
       - name: Checkout do codigo
@@ -116,7 +117,7 @@ jobs:
 
       - name: Verificar se o app publicado responde
         run: |
-          URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/_stcore/health"
+          URL="${{ vars.AZURE_WEBAPP_URL }}/_stcore/health"
           # o plano F1 pode levar alguns minutos para instalar as dependencias e iniciar
           for i in $(seq 1 40); do
             if curl -fsS --max-time 20 "$URL" | grep -q ok; then
