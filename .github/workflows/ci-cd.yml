@@ -1,0 +1,72 @@
+# Workflow de CI do Agente El Nino.
+# A etapa de deploy no Azure App Service sera adicionada a este arquivo (Issue #5).
+name: CI/CD - Agente El Nino
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  build-e-testes:
+    name: Build e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Rodar testes automatizados (pytest)
+        run: pytest --junitxml=resultados-testes.xml
+
+      - name: Reprocessar a analise a partir do cache e validar o resultado
+        run: |
+          cp saida/facts.json /tmp/facts_versionado.json
+          python analise_el_nino.py
+          python scripts/verificar_reprocessamento.py /tmp/facts_versionado.json saida/facts.json
+
+      - name: Smoke test - iniciar o app Streamlit
+        run: |
+          streamlit run app_el_nino.py --server.port 8501 --server.headless true \
+            --browser.gatherUsageStats false > streamlit.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8501/_stcore/health | grep -q ok; then
+              echo "App respondeu ao health check em ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "App nao iniciou em 30s"; cat streamlit.log; exit 1
+
+      - name: Publicar resultados dos testes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-testes
+          path: resultados-testes.xml
