@@ -1,0 +1,26 @@
+# Dados brutos do INMET (1,4 GB) - nao versionar; ver README
+2024/
+2025/
+2026/
+*.zip
+*.CSV
+INMET_*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Segredos e configuracao local
+.env
+*.pubxml
+*.publishsettings
+.streamlit/secrets.toml
+
+# Editor / SO
+.vscode/
+.idea/
+.trae-html-share-packages/
+Thumbs.db
