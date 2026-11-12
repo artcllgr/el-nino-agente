@@ -24,3 +24,6 @@ venv/
 .idea/
 .trae-html-share-packages/
 Thumbs.db
+
+# Gerado no deploy pelo GitHub Actions
+version.json
