@@ -356,7 +356,7 @@ def main() -> None:
         ]
         cols = st.columns(len(sugestoes))
         for col, s in zip(cols, sugestoes):
-            if col.button(s, use_container_width=True):
+            if col.button(s, width="stretch"):
                 st.session_state.chat.append({"role": "user", "content": s})
                 st.session_state.chat.append({"role": "assistant", "content": responder(s, f)})
 
@@ -379,7 +379,7 @@ def main() -> None:
         st.dataframe(
             df[["ranking", "uf", "regiao_nome", "indice_impacto", "calor_z", "seca_z",
                 "chuva_z", "perc_meses_quentes", "dias_calor_extremo", "n_estacoes"]],
-            use_container_width=True, hide_index=True,
+            width="stretch", hide_index=True,
         )
         st.subheader("Evolucao mensal (anomalias nacionais)")
         serie = pd.DataFrame(f["serie_nacional"]).set_index("mes_str")
