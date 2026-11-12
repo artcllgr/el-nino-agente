@@ -1,5 +1,7 @@
-# Workflow de CI do Agente El Nino.
-# A etapa de deploy no Azure App Service sera adicionada a este arquivo (Issue #5).
+# Workflow de CI/CD do Agente El Nino.
+#   1) build-e-testes: roda em todo push, Pull Request para a main e sob demanda
+#   2) deploy: so roda em push na main e somente se o job 1 passar; publica o app
+#      no Azure App Service usando o publish profile guardado em secret do GitHub
 name: CI/CD - Agente El Nino
 
 on:
@@ -14,7 +16,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Nas branches de trabalho, um push novo cancela a execucao anterior;
+  # na main nao, para nunca interromper um deploy no meio
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   PYTHON_VERSION: "3.12"
@@ -70,3 +74,54 @@ jobs:
         with:
           name: resultados-testes
           path: resultados-testes.xml
+
+  deploy:
+    name: Deploy no Azure App Service
+    needs: build-e-testes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: producao
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Gerar version.json (versao exibida no rodape do app)
+        run: |
+          cat > version.json <<JSON
+          {
+            "versao": "${{ github.run_number }}",
+            "commit": "${{ github.sha }}",
+            "data_deploy": "$(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M') (horario de Brasilia)"
+          }
+          JSON
+          cat version.json
+
+      - name: Montar pacote com os arquivos do app
+        run: |
+          mkdir -p pacote/saida
+          cp app_el_nino.py requirements.txt version.json pacote/
+          cp saida/facts.json pacote/saida/
+          ls -R pacote
+
+      - name: Publicar no Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: pacote
+
+      - name: Verificar se o app publicado responde
+        run: |
+          URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/_stcore/health"
+          # o plano F1 pode levar alguns minutos para instalar as dependencias e iniciar
+          for i in $(seq 1 40); do
+            if curl -fsS --max-time 20 "$URL" | grep -q ok; then
+              echo "App publicado respondendo (tentativa $i)"; exit 0
+            fi
+            echo "Aguardando o app iniciar... ($i/40)"; sleep 15
+          done
+          echo "O app nao respondeu em 10 minutos"; exit 1
