@@ -20,6 +20,8 @@ import streamlit as st
 
 BASE = Path(__file__).resolve().parent
 FACTS = BASE / "saida" / "facts.json"
+# Gerado pelo workflow de deploy (GitHub Actions) com o commit e a data da publicacao
+VERSION_FILE = BASE / "version.json"
 
 # --------------------------------------------------------------------------- #
 # Base de conhecimento (curada) - orientacoes e contexto
@@ -66,6 +68,23 @@ KB_CHUVA = (
 
 EMERGENCIAS = "Emergencias: **Defesa Civil 199** | **SAMU 192** | **Bombeiros 193**."
 
+AVISO_FONTE = (
+    "A \"anomalia confirmada\" deste agente e o sinal de calor medido nas estacoes "
+    "automaticas do INMET em relacao ao proprio periodo 2024-2026. A confirmacao oficial "
+    "do El Nino vem do monitoramento do Oceano Pacifico (indice ONI / Nino 3.4), "
+    "divulgado por INMET, CPTEC/INPE e NOAA."
+)
+
+# Palavras-chave de cada regiao (comparadas por palavra inteira, para que
+# "consultar" nao seja confundido com "sul", por exemplo)
+REGIAO_TOKENS = {
+    "S": ["sul", "parana", "santa catarina", "rio grande do sul"],
+    "NE": ["nordeste", "nordestino"],
+    "N": ["norte", "amazonia", "amazonas"],
+    "CO": ["centro-oeste", "centro oeste"],
+    "SE": ["sudeste"],
+}
+
 UF_NOME = {
     "AC": "Acre", "AL": "Alagoas", "AP": "Amapa", "AM": "Amazonas", "BA": "Bahia",
     "CE": "Ceara", "DF": "Distrito Federal", "ES": "Espirito Santo", "GO": "Goias",
@@ -94,6 +113,25 @@ def _norm(txt: str) -> str:
 
 def _palavras(txt: str) -> set[str]:
     return set(re.findall(r"[a-z]+", _norm(txt)))
+
+
+def _tem_termo(q: str, termo: str) -> bool:
+    """True se `termo` aparece em `q` como palavra(s) inteira(s)."""
+    return re.search(r"(?<![a-z])" + re.escape(termo) + r"(?![a-z])", q) is not None
+
+
+def carregar_versao(path: Path = VERSION_FILE) -> dict:
+    """Versao publicada: lida do version.json escrito pelo workflow de deploy.
+    Sem o arquivo (execucao local), devolve 'local'."""
+    try:
+        dados = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "versao": str(dados.get("versao", "local")),
+            "commit": str(dados.get("commit", ""))[:7],
+            "data_deploy": str(dados.get("data_deploy", "")),
+        }
+    except (OSError, ValueError):
+        return {"versao": "local", "commit": "", "data_deploy": ""}
 
 
 # --------------------------------------------------------------------------- #
@@ -125,14 +163,8 @@ def responder(pergunta: str, f: dict) -> str:
 
     # localizar regiao citada
     regiao_citada = None
-    for key, tokens in {
-        "S": ["sul", "parana", "santa catarina", "rio grande do sul"],
-        "NE": ["nordeste", "nordestino"],
-        "N": ["norte", "amazonia", "amazonas"],
-        "CO": ["centro-oeste", "centro oeste"],
-        "SE": ["sudeste"],
-    }.items():
-        if any(t in q for t in tokens):
+    for key, tokens in REGIAO_TOKENS.items():
+        if any(_tem_termo(q, t) for t in tokens):
             regiao_citada = key
             break
 
@@ -157,7 +189,9 @@ def responder(pergunta: str, f: dict) -> str:
             "Experimente: *\"Quando a anomalia foi confirmada?\"* ou *\"Quais estados mais impactados?\"*"
         )
 
-    if "o que e" in q or "explica" in q and "nino" in q or ("el nino" in q and "que" in q and "?" in pergunta):
+    # "o que e El Nino?" / "explica o El Nino" (antes, "o que e" casava com "o que eu devo fazer...")
+    pergunta_conceito = _tem_termo(q, "o que e") or _tem_termo(q, "o que significa") or "explica" in q
+    if pergunta_conceito and "nino" in q:
         return (
             "**El Nino** e um fenomeno climatico natural caracterizado pelo aquecimento anormal das "
             "aguas superficiais do Oceano Pacifico Equatorial. Ele enfraquece os ventos alisios e "
@@ -171,6 +205,14 @@ def responder(pergunta: str, f: dict) -> str:
         item = next((r for r in ranking if r["uf"] == uf_citada), None)
         if item:
             return _ficha_estado(item, f)
+        # UF sem estacoes com dados no periodo de impacto (ex.: RR, cuja unica estacao
+        # parou de transmitir em 2025-10): explicar em vez de cair no resumo generico
+        return (
+            f"**{uf_citada} - {UF_NOME.get(uf_citada, '')}**: nao ha estacoes do INMET com dados "
+            f"no periodo de impacto ({f.get('periodo_impacto_label', '-')}), por isso o estado "
+            "nao entra no ranking.\n\n"
+            f"Consulte os boletins oficiais: {FONTE_OFICIAL}\n\n{EMERGENCIAS}"
+        )
 
     # quando confirmada
     if any(t in q for t in ["quando", "confirmad", "data", "inicio", "comecou", "detectad"]):
@@ -204,7 +246,10 @@ def responder(pergunta: str, f: dict) -> str:
             f"| calor z={r['calor_z']:.2f}, seca z={r['seca_z']:.2f}, chuva z={r['chuva_z']:.2f}"
             for r in top
         )
-        return f"Estados mais impactados (2026), pelo indice region-aware:\n\n{linhas}\n\n{EMERGENCIAS}"
+        return (
+            f"Estados mais impactados ({f.get('periodo_impacto_label', '-')}), "
+            f"pelo indice region-aware:\n\n{linhas}\n\n{EMERGENCIAS}"
+        )
 
     # temas de orientacao
     if any(t in q for t in ["calor", "onda de calor", "temperatura alta", "insolacao", "estresse termico"]):
@@ -243,7 +288,8 @@ def _ficha_estado(item: dict, f: dict) -> str:
     reg = item["regiao"]
     return (
         f"**{item['uf']} - {UF_NOME.get(item['uf'], '')} ({item['regiao_nome']})**\n\n"
-        f"- Indice de impacto (2026): **{item['indice_impacto']:.2f}** (ranking #{item['ranking']}).\n"
+        f"- Indice de impacto ({f.get('periodo_impacto_label', '-')}): "
+        f"**{item['indice_impacto']:.2f}** (ranking #{item['ranking']}).\n"
         f"- Anomalia de calor (z medio): {item['calor_z']:.2f} | seca: {item['seca_z']:.2f} "
         f"| chuva: {item['chuva_z']:.2f}.\n"
         f"- Meses com calor anomalo: {item['perc_meses_quentes']:.0f}% | "
@@ -273,7 +319,10 @@ def _ficha_regiao(reg: str, ranking: list[dict], f: dict) -> str:
 def main() -> None:
     st.set_page_config(page_title="Agente El Nino", page_icon="🌡️", layout="wide")
     st.title("🌡️ Agente El Nino")
-    st.caption("Analise das estacoes automaticas do INMET (2024-2026) e orientacoes de protecao.")
+    st.caption(
+        "Solucao CitizenTech: analise das estacoes automaticas do INMET (2024-2026) "
+        "e orientacoes de protecao ao cidadao."
+    )
 
     if not FACTS.exists():
         st.error("Arquivo saida/facts.json nao encontrado. Rode `python analise_el_nino.py` primeiro.")
@@ -311,6 +360,8 @@ def main() -> None:
                 st.session_state.chat.append({"role": "user", "content": s})
                 st.session_state.chat.append({"role": "assistant", "content": responder(s, f)})
 
+        st.caption(AVISO_FONTE + f" Fonte oficial de orientacoes: {FONTE_OFICIAL}")
+
         for msg in st.session_state.chat:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -323,7 +374,7 @@ def main() -> None:
                 st.markdown(responder(pergunta, f))
 
     with aba_painel:
-        st.subheader("Ranking de estados mais impactados (2026)")
+        st.subheader(f"Ranking de estados mais impactados ({f.get('periodo_impacto_label', '-')})")
         df = pd.DataFrame(f["ranking_estados"])
         st.dataframe(
             df[["ranking", "uf", "regiao_nome", "indice_impacto", "calor_z", "seca_z",
@@ -347,6 +398,16 @@ def main() -> None:
         st.info(
             "Este agente usa dados do INMET e orientacoes gerais de saude/protecao. "
             "Nao substitui boletins oficiais de monitoramento (INMET, ANA, CPTEC/INPE, Defesa Civil)."
+        )
+
+    # Rodape com a versao publicada: comprova que o deploy automatizado atualizou o app
+    v = carregar_versao()
+    if v["versao"] == "local":
+        st.caption("Versao: local (execucao fora do Azure)")
+    else:
+        st.caption(
+            f"Versao {v['versao']} | commit {v['commit']} | publicado em {v['data_deploy']} "
+            "via GitHub Actions -> Azure App Service"
         )
 
 
