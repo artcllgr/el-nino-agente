@@ -138,7 +138,7 @@ O plano F1 gratuito "dorme" quando fica sem acesso. Por isso, o primeiro carrega
 
 ## 8. Evidências
 
-Todos os prints estão em [`docs/evidencias/`](docs/evidencias/).
+Todos os prints estão em [`docs/evidencias/`](docs/evidencias/). Eles também estão reunidos em um PDF, com legendas: [`docs/Evidencias_GS_Cloud_2TSCPV.pdf`](docs/Evidencias_GS_Cloud_2TSCPV.pdf).
 
 ### 8.1 GitHub Issues e Projects
 
@@ -149,6 +149,7 @@ Todos os prints estão em [`docs/evidencias/`](docs/evidencias/).
 | Project em tabela: responsável, status e PR ligado a cada tarefa | [04-project-tabela.png](docs/evidencias/04-project-tabela.png) |
 | Project em quadro: #6 em Todo, #1 em In Progress, #2 a #5 em Done | [04b-project-board.png](docs/evidencias/04b-project-board.png) |
 | Evolução: #6 movida para In Progress | [15-project-6-in-progress.png](docs/evidencias/15-project-6-in-progress.png) |
+| Final: todas as issues em Done | [16-project-tudo-done.png](docs/evidencias/16-project-tudo-done.png) |
 
 ![Project em quadro](docs/evidencias/04b-project-board.png)
 
