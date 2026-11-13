@@ -88,6 +88,18 @@ def test_pergunta_desconhecida_devolve_resumo(fatos):
     assert fatos["ranking_estados"][0]["uf"] in resp
 
 
+def test_botao_o_que_e_el_nino_explica_o_fenomeno(fatos):
+    assert "O que e o El Nino?" in app.SUGESTOES
+    assert "Pacifico Equatorial" in app.responder("O que e o El Nino?", fatos)
+
+
+@pytest.mark.parametrize("pergunta", app.SUGESTOES)
+def test_todo_botao_tem_resposta_especifica(fatos, pergunta):
+    # nenhum botao pode cair na resposta padrao (resumo geral)
+    assert "Nao entendi" not in app.responder(pergunta, fatos)
+    assert "resumo" not in app.responder(pergunta, fatos)
+
+
 def test_versao_local_sem_arquivo(tmp_path):
     assert app.carregar_versao(tmp_path / "nao_existe.json")["versao"] == "local"
 
