@@ -75,6 +75,15 @@ AVISO_FONTE = (
     "divulgado por INMET, CPTEC/INPE e NOAA."
 )
 
+# Perguntas prontas exibidas como botoes na aba do agente
+SUGESTOES = [
+    "O que e o El Nino?",
+    "Quando a anomalia foi confirmada?",
+    "Quais estados serao mais impactados?",
+    "E no Rio Grande do Sul?",
+    "Orientacoes para onda de calor",
+]
+
 # Palavras-chave de cada regiao (comparadas por palavra inteira, para que
 # "consultar" nao seja confundido com "sul", por exemplo)
 REGIAO_TOKENS = {
@@ -348,14 +357,8 @@ def main() -> None:
                 )}
             ]
 
-        sugestoes = [
-            "Quando a anomalia foi confirmada?",
-            "Quais estados serao mais impactados?",
-            "E no Rio Grande do Sul?",
-            "Orientacoes para onda de calor",
-        ]
-        cols = st.columns(len(sugestoes))
-        for col, s in zip(cols, sugestoes):
+        cols = st.columns(len(SUGESTOES))
+        for col, s in zip(cols, SUGESTOES):
             if col.button(s, width="stretch"):
                 st.session_state.chat.append({"role": "user", "content": s})
                 st.session_state.chat.append({"role": "assistant", "content": responder(s, f)})
